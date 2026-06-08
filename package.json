@@ -7,7 +7,7 @@
   "dev": "tsx src/index.ts",
   "build": "tsc",
   "start": "node dist/src/index.js",
-  "test": "vitest run",
+  "test": "vitest run tests",
   "test:watch": "vitest"
 },
   "keywords": [],
