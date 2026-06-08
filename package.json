@@ -6,6 +6,7 @@
   "scripts": {
   "dev": "tsx src/index.ts",
   "server": "tsx src/index.ts",
+  "cli": "tsx src/client/CliClient.ts",
   "build": "tsc",
   "start": "node dist/src/index.js",
   "test": "vitest run tests",
