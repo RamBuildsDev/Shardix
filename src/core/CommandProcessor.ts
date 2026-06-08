@@ -1,13 +1,21 @@
-import type { CommandResponse, ParsedCommand } from "./commands";
+import type { CommandResponse, ParsedCommand, WalEntry } from "./commands";
 import { KEY_NOT_FOUND } from "./errors";
 import { StorageEngine } from "./StorageEngine";
 
+type WriteAheadLogger = {
+  append(entry: WalEntry): void;
+};
+
 export class CommandProcessor {
-  constructor(private storageEngine: StorageEngine) {}
+  constructor(
+    private storageEngine: StorageEngine,
+    private writeAheadLog?: WriteAheadLogger
+  ) {}
 
   execute(command: ParsedCommand): CommandResponse {
     switch (command.type) {
       case "SET":
+        this.writeAheadLog?.append(command);
         this.storageEngine.set(command.key, command.value);
         return "OK";
 
@@ -15,7 +23,13 @@ export class CommandProcessor {
         return this.storageEngine.get(command.key) ?? KEY_NOT_FOUND;
 
       case "DELETE":
-        return this.storageEngine.delete(command.key) ? "DELETED" : KEY_NOT_FOUND;
+        if (!this.storageEngine.exists(command.key)) {
+          return KEY_NOT_FOUND;
+        }
+
+        this.writeAheadLog?.append(command);
+        this.storageEngine.delete(command.key);
+        return "DELETED";
 
       case "EXISTS":
         return this.storageEngine.exists(command.key);
@@ -24,6 +38,7 @@ export class CommandProcessor {
         return this.storageEngine.keys();
 
       case "CLEAR":
+        this.writeAheadLog?.append(command);
         this.storageEngine.clear();
         return "OK";
 

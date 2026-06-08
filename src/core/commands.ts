@@ -51,4 +51,6 @@ export type ParsedCommand =
   | ClearCommand
   | SizeCommand;
 
+export type WalEntry = SetCommand | DeleteCommand | ClearCommand;
+
 export type CommandResponse = string | string[] | number | boolean;
