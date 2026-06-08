@@ -7,7 +7,10 @@ export type CommandType =
   | "EXISTS"
   | "KEYS"
   | "CLEAR"
-  | "SIZE";
+  | "SIZE"
+  | "REPL_SET"
+  | "REPL_DELETE"
+  | "REPL_CLEAR";
 
 export type SetCommand = {
   type: "SET";
@@ -42,6 +45,21 @@ export type SizeCommand = {
   type: "SIZE";
 };
 
+export type ReplSetCommand = {
+  type: "REPL_SET";
+  key: Key;
+  value: Value;
+};
+
+export type ReplDeleteCommand = {
+  type: "REPL_DELETE";
+  key: Key;
+};
+
+export type ReplClearCommand = {
+  type: "REPL_CLEAR";
+};
+
 export type ParsedCommand =
   | SetCommand
   | GetCommand
@@ -49,7 +67,10 @@ export type ParsedCommand =
   | ExistsCommand
   | KeysCommand
   | ClearCommand
-  | SizeCommand;
+  | SizeCommand
+  | ReplSetCommand
+  | ReplDeleteCommand
+  | ReplClearCommand;
 
 export type WalEntry = SetCommand | DeleteCommand | ClearCommand;
 

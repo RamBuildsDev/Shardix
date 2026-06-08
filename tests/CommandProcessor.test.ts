@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { WalEntry } from "../src/core/commands";
 import { CommandProcessor } from "../src/core/CommandProcessor";
-import { KEY_NOT_FOUND } from "../src/core/errors";
+import { KEY_NOT_FOUND, NOT_LEADER } from "../src/core/errors";
 import { StorageEngine } from "../src/core/StorageEngine";
 import { RecoveryManager } from "../src/persistence/RecoveryManager";
 
@@ -260,6 +260,106 @@ describe("CommandProcessor", () => {
     expect(storageEngine.get("name")).toBe("Ram");
     expect(wal.entries).toEqual([{ type: "SET", key: "name", value: "Ram" }]);
   });
+
+  it("leader accepts SET", async () => {
+    const wal = createFakeWal();
+    processor = new CommandProcessor(storageEngine, wal, undefined, {
+      role: "leader",
+    });
+
+    await expect(
+      processor.execute({ type: "SET", key: "name", value: "Siva" })
+    ).resolves.toBe("OK");
+  });
+
+  it("leader replicates SET after local write", async () => {
+    const wal = createFakeWal();
+    const replicationManager = createFakeReplicationManager((operation) => {
+      expect(operation).toEqual("SET name Siva");
+      expect(wal.entries).toEqual([{ type: "SET", key: "name", value: "Siva" }]);
+      expect(storageEngine.get("name")).toBe("Siva");
+    });
+    processor = new CommandProcessor(storageEngine, wal, undefined, {
+      role: "leader",
+      replicationManager,
+    });
+
+    await expect(
+      processor.execute({ type: "SET", key: "name", value: "Siva" })
+    ).resolves.toBe("OK");
+    expect(replicationManager.operations).toEqual(["SET name Siva"]);
+  });
+
+  it("follower rejects normal SET with NOT_LEADER", async () => {
+    processor = new CommandProcessor(storageEngine, createFakeWal(), undefined, {
+      role: "follower",
+    });
+
+    await expect(
+      processor.execute({ type: "SET", key: "name", value: "Siva" })
+    ).resolves.toBe(NOT_LEADER);
+  });
+
+  it("follower rejects normal DELETE with NOT_LEADER", async () => {
+    processor = new CommandProcessor(storageEngine, createFakeWal(), undefined, {
+      role: "follower",
+    });
+
+    await expect(
+      processor.execute({ type: "DELETE", key: "name" })
+    ).resolves.toBe(NOT_LEADER);
+  });
+
+  it("follower rejects normal CLEAR with NOT_LEADER", async () => {
+    processor = new CommandProcessor(storageEngine, createFakeWal(), undefined, {
+      role: "follower",
+    });
+
+    await expect(processor.execute({ type: "CLEAR" })).resolves.toBe(
+      NOT_LEADER
+    );
+  });
+
+  it("follower accepts REPL SET", async () => {
+    const wal = createFakeWal();
+    processor = new CommandProcessor(storageEngine, wal, undefined, {
+      role: "follower",
+    });
+
+    await expect(
+      processor.execute({ type: "REPL_SET", key: "name", value: "Siva" })
+    ).resolves.toBe("ACK");
+    expect(storageEngine.get("name")).toBe("Siva");
+    expect(wal.entries).toEqual([{ type: "SET", key: "name", value: "Siva" }]);
+  });
+
+  it("follower accepts REPL DELETE", async () => {
+    const wal = createFakeWal();
+    storageEngine.set("name", "Siva");
+    processor = new CommandProcessor(storageEngine, wal, undefined, {
+      role: "follower",
+    });
+
+    await expect(
+      processor.execute({ type: "REPL_DELETE", key: "name" })
+    ).resolves.toBe("ACK");
+    expect(storageEngine.get("name")).toBeUndefined();
+    expect(wal.entries).toEqual([{ type: "DELETE", key: "name" }]);
+  });
+
+  it("follower accepts REPL CLEAR", async () => {
+    const wal = createFakeWal();
+    storageEngine.set("name", "Siva");
+    processor = new CommandProcessor(storageEngine, wal, undefined, {
+      role: "follower",
+    });
+
+    await expect(processor.execute({ type: "REPL_CLEAR" })).resolves.toBe(
+      "ACK"
+    );
+    expect(storageEngine.size()).toBe(0);
+    expect(wal.entries).toEqual([{ type: "CLEAR" }]);
+  });
 });
 
 function createFakeWal(onAppend?: (entry: WalEntry) => void): {
@@ -275,6 +375,34 @@ function createFakeWal(onAppend?: (entry: WalEntry) => void): {
     },
     readAll(): WalEntry[] {
       return this.entries;
+    },
+  };
+}
+
+function createFakeReplicationManager(
+  onReplicate?: (operation: string) => void
+): {
+  operations: string[];
+  replicateSet(key: string, value: string): Promise<void>;
+  replicateDelete(key: string): Promise<void>;
+  replicateClear(): Promise<void>;
+} {
+  return {
+    operations: [],
+    async replicateSet(key: string, value: string): Promise<void> {
+      const operation = `SET ${key} ${value}`;
+      onReplicate?.(operation);
+      this.operations.push(operation);
+    },
+    async replicateDelete(key: string): Promise<void> {
+      const operation = `DELETE ${key}`;
+      onReplicate?.(operation);
+      this.operations.push(operation);
+    },
+    async replicateClear(): Promise<void> {
+      const operation = "CLEAR";
+      onReplicate?.(operation);
+      this.operations.push(operation);
     },
   };
 }

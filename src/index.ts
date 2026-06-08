@@ -1,30 +1,68 @@
-import { CommandParser } from "./core/CommandParser";
-import { CommandProcessor } from "./core/CommandProcessor";
-import { StorageEngine } from "./core/StorageEngine";
-import { RecoveryManager } from "./persistence/RecoveryManager";
-import { WriteAheadLog } from "./persistence/WriteAheadLog";
-import { TcpServer } from "./server/TcpServer";
+import { ShardixNode } from "./cluster/ShardixNode";
+import type { NodeConfig, NodeRole, PeerConfig } from "./cluster/NodeConfig";
 
-const host = "127.0.0.1";
-const port = 7379;
+const defaultHost = "127.0.0.1";
+const defaultPort = 7379;
 
 async function main(): Promise<void> {
-  const storageEngine = new StorageEngine();
-  const writeAheadLog = new WriteAheadLog("data/shardix.log");
-  const recoveryManager = new RecoveryManager(writeAheadLog, storageEngine);
-  recoveryManager.recover();
+  const config = readNodeConfigFromEnv();
+  const node = new ShardixNode(config);
 
-  const commandParser = new CommandParser();
-  const commandProcessor = new CommandProcessor(storageEngine, writeAheadLog);
-  const server = new TcpServer(commandParser, commandProcessor, host, port);
-
-  await server.start();
-  console.log(`Shardix server listening on ${host}:${port}`);
+  await node.start();
+  console.log(
+    `Shardix ${config.role} ${config.nodeId} listening on ${config.host}:${config.port}`
+  );
 
   process.on("SIGINT", async () => {
-    await server.stop();
+    await node.stop();
     process.exit(0);
   });
+}
+
+function readNodeConfigFromEnv(): NodeConfig {
+  const nodeId = process.env.NODE_ID ?? "node-1";
+  const role = readRole(process.env.ROLE);
+  const host = process.env.HOST ?? defaultHost;
+  const port = Number(process.env.PORT ?? defaultPort);
+  const walPath = process.env.WAL_PATH ?? "data/shardix.log";
+  const peers = parsePeers(process.env.PEERS);
+
+  return {
+    nodeId,
+    role,
+    host,
+    port,
+    walPath,
+    peers,
+  };
+}
+
+function readRole(value: string | undefined): NodeRole {
+  if (value === "follower") {
+    return "follower";
+  }
+
+  return "leader";
+}
+
+function parsePeers(value: string | undefined): PeerConfig[] {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((peer, index) => peer.trim())
+    .filter(Boolean)
+    .map((peer, index) => {
+      const [host, rawPort] = peer.split(":");
+
+      return {
+        nodeId: `peer-${index + 1}`,
+        host,
+        port: Number(rawPort),
+      };
+    });
 }
 
 main().catch((error) => {

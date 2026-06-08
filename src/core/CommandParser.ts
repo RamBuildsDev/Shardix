@@ -1,4 +1,11 @@
-import type { CommandType, ParsedCommand } from "./commands";
+import type {
+  CommandType,
+  DeleteCommand,
+  ExistsCommand,
+  GetCommand,
+  ParsedCommand,
+  SetCommand,
+} from "./commands";
 import {
   EMPTY_KEY,
   INVALID_ARGUMENTS,
@@ -21,6 +28,10 @@ export class CommandParser {
     const command = rawCommand.toUpperCase();
     const rest = trimmedInput.slice(rawCommand.length).trimStart();
 
+    if (command === "REPL") {
+      return this.parseReplicationCommand(rest);
+    }
+
     if (command === "SET") {
       return this.parseSet(rest);
     }
@@ -37,7 +48,7 @@ export class CommandParser {
     throw new ShardixError(INVALID_COMMAND, `Unsupported command: ${rawCommand}`);
   }
 
-  private parseSet(rest: string): ParsedCommand {
+  private parseSet(rest: string): SetCommand {
     const keyMatch = rest.match(/^\S+/);
 
     if (!keyMatch) {
@@ -54,7 +65,42 @@ export class CommandParser {
     return { type: "SET", key, value };
   }
 
-  private parseKeyCommand(command: string, rest: string): ParsedCommand {
+  private parseReplicationCommand(rest: string): ParsedCommand {
+    const [rawCommand] = rest.split(/\s+/, 1);
+
+    if (!rawCommand) {
+      throw new ShardixError(INVALID_ARGUMENTS, "REPL requires a command");
+    }
+
+    const command = rawCommand.toUpperCase();
+    const commandRest = rest.slice(rawCommand.length).trimStart();
+
+    if (command === "SET") {
+      const parsedSet = this.parseSet(commandRest);
+      return {
+        type: "REPL_SET",
+        key: parsedSet.key,
+        value: parsedSet.value,
+      };
+    }
+
+    if (command === "DELETE") {
+      const parsedDelete = this.parseKeyCommand("DELETE", commandRest);
+      return { type: "REPL_DELETE", key: parsedDelete.key };
+    }
+
+    if (command === "CLEAR") {
+      this.ensureNoArguments(commandRest);
+      return { type: "REPL_CLEAR" };
+    }
+
+    throw new ShardixError(INVALID_COMMAND, `Unsupported REPL command: ${rawCommand}`);
+  }
+
+  private parseKeyCommand(
+    command: string,
+    rest: string
+  ): GetCommand | DeleteCommand | ExistsCommand {
     const parts = rest.split(/\s+/).filter(Boolean);
 
     if (parts.length !== 1) {

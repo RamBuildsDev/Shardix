@@ -56,8 +56,39 @@ describe("CommandParser", () => {
     expect(parser.parse("SIZE")).toEqual({ type: "SIZE" });
   });
 
+  it("parses REPL SET", () => {
+    expect(parser.parse("REPL SET name Siva")).toEqual({
+      type: "REPL_SET",
+      key: "name",
+      value: "Siva",
+    });
+  });
+
+  it("parses REPL SET with spaces in value", () => {
+    expect(parser.parse("REPL SET fullName Siva Ram Kumar")).toEqual({
+      type: "REPL_SET",
+      key: "fullName",
+      value: "Siva Ram Kumar",
+    });
+  });
+
+  it("parses REPL DELETE", () => {
+    expect(parser.parse("REPL DELETE name")).toEqual({
+      type: "REPL_DELETE",
+      key: "name",
+    });
+  });
+
+  it("parses REPL CLEAR", () => {
+    expect(parser.parse("REPL CLEAR")).toEqual({ type: "REPL_CLEAR" });
+  });
+
   it("throws INVALID_COMMAND for unknown command", () => {
     expectShardixError(() => parser.parse("UNKNOWN name"), INVALID_COMMAND);
+  });
+
+  it("rejects invalid REPL command", () => {
+    expectShardixError(() => parser.parse("REPL GET name"), INVALID_COMMAND);
   });
 
   it("throws INVALID_ARGUMENTS for missing key", () => {
