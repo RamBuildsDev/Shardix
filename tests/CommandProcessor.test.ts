@@ -3,6 +3,7 @@ import type { WalEntry } from "../src/core/commands";
 import { CommandProcessor } from "../src/core/CommandProcessor";
 import { KEY_NOT_FOUND } from "../src/core/errors";
 import { StorageEngine } from "../src/core/StorageEngine";
+import { RecoveryManager } from "../src/persistence/RecoveryManager";
 
 describe("CommandProcessor", () => {
   let storageEngine: StorageEngine;
@@ -13,8 +14,8 @@ describe("CommandProcessor", () => {
     processor = new CommandProcessor(storageEngine);
   });
 
-  it("SET stores value and returns OK", () => {
-    const response = processor.execute({
+  it("SET stores value and returns OK", async () => {
+    const response = await processor.execute({
       type: "SET",
       key: "name",
       value: "Siva",
@@ -24,152 +25,279 @@ describe("CommandProcessor", () => {
     expect(storageEngine.get("name")).toBe("Siva");
   });
 
-  it("GET returns existing value", () => {
+  it("GET returns existing value", async () => {
     storageEngine.set("name", "Siva");
 
-    expect(processor.execute({ type: "GET", key: "name" })).toBe("Siva");
+    await expect(processor.execute({ type: "GET", key: "name" })).resolves.toBe(
+      "Siva"
+    );
   });
 
-  it("GET returns KEY_NOT_FOUND for missing key", () => {
-    expect(processor.execute({ type: "GET", key: "missing" })).toBe(
+  it("GET returns KEY_NOT_FOUND for missing key", async () => {
+    await expect(processor.execute({ type: "GET", key: "missing" })).resolves.toBe(
       KEY_NOT_FOUND
     );
   });
 
-  it("DELETE removes key and returns DELETED", () => {
+  it("DELETE removes key and returns DELETED", async () => {
     storageEngine.set("name", "Siva");
 
-    expect(processor.execute({ type: "DELETE", key: "name" })).toBe("DELETED");
+    await expect(
+      processor.execute({ type: "DELETE", key: "name" })
+    ).resolves.toBe("DELETED");
     expect(storageEngine.exists("name")).toBe(false);
   });
 
-  it("DELETE returns KEY_NOT_FOUND for missing key", () => {
-    expect(processor.execute({ type: "DELETE", key: "missing" })).toBe(
-      KEY_NOT_FOUND
-    );
+  it("DELETE returns KEY_NOT_FOUND for missing key", async () => {
+    await expect(
+      processor.execute({ type: "DELETE", key: "missing" })
+    ).resolves.toBe(KEY_NOT_FOUND);
   });
 
-  it("EXISTS returns true for existing key", () => {
+  it("EXISTS returns true for existing key", async () => {
     storageEngine.set("name", "Siva");
 
-    expect(processor.execute({ type: "EXISTS", key: "name" })).toBe(true);
+    await expect(
+      processor.execute({ type: "EXISTS", key: "name" })
+    ).resolves.toBe(true);
   });
 
-  it("EXISTS returns false for missing key", () => {
-    expect(processor.execute({ type: "EXISTS", key: "missing" })).toBe(false);
+  it("EXISTS returns false for missing key", async () => {
+    await expect(
+      processor.execute({ type: "EXISTS", key: "missing" })
+    ).resolves.toBe(false);
   });
 
-  it("KEYS returns all keys", () => {
+  it("KEYS returns all keys", async () => {
     storageEngine.set("name", "Siva");
     storageEngine.set("city", "Hyderabad");
 
-    expect(processor.execute({ type: "KEYS" })).toEqual(
+    await expect(processor.execute({ type: "KEYS" })).resolves.toEqual(
       expect.arrayContaining(["name", "city"])
     );
   });
 
-  it("CLEAR removes all keys and returns OK", () => {
+  it("CLEAR removes all keys and returns OK", async () => {
     storageEngine.set("name", "Siva");
     storageEngine.set("city", "Hyderabad");
 
-    expect(processor.execute({ type: "CLEAR" })).toBe("OK");
+    await expect(processor.execute({ type: "CLEAR" })).resolves.toBe("OK");
     expect(storageEngine.size()).toBe(0);
   });
 
-  it("SIZE returns number of stored keys", () => {
+  it("SIZE returns number of stored keys", async () => {
     storageEngine.set("name", "Siva");
     storageEngine.set("city", "Hyderabad");
 
-    expect(processor.execute({ type: "SIZE" })).toBe(2);
+    await expect(processor.execute({ type: "SIZE" })).resolves.toBe(2);
   });
 
-  it("SET writes to WAL before storing value", () => {
+  it("SET writes to WAL before storing value", async () => {
     const wal = createFakeWal((entry) => {
       expect(entry).toEqual({ type: "SET", key: "name", value: "Siva" });
       expect(storageEngine.get("name")).toBeUndefined();
     });
     processor = new CommandProcessor(storageEngine, wal);
 
-    expect(
+    await expect(
       processor.execute({ type: "SET", key: "name", value: "Siva" })
-    ).toBe("OK");
+    ).resolves.toBe("OK");
     expect(wal.entries).toEqual([{ type: "SET", key: "name", value: "Siva" }]);
     expect(storageEngine.get("name")).toBe("Siva");
   });
 
-  it("DELETE writes to WAL when key exists", () => {
+  it("DELETE writes to WAL when key exists", async () => {
     const wal = createFakeWal();
     storageEngine.set("name", "Siva");
     processor = new CommandProcessor(storageEngine, wal);
 
-    expect(processor.execute({ type: "DELETE", key: "name" })).toBe("DELETED");
+    await expect(
+      processor.execute({ type: "DELETE", key: "name" })
+    ).resolves.toBe("DELETED");
     expect(wal.entries).toEqual([{ type: "DELETE", key: "name" }]);
   });
 
-  it("DELETE does not write to WAL when key is missing", () => {
+  it("DELETE does not write to WAL when key is missing", async () => {
     const wal = createFakeWal();
     processor = new CommandProcessor(storageEngine, wal);
 
-    expect(processor.execute({ type: "DELETE", key: "missing" })).toBe(
-      KEY_NOT_FOUND
-    );
+    await expect(
+      processor.execute({ type: "DELETE", key: "missing" })
+    ).resolves.toBe(KEY_NOT_FOUND);
     expect(wal.entries).toEqual([]);
   });
 
-  it("CLEAR writes to WAL", () => {
+  it("CLEAR writes to WAL", async () => {
     const wal = createFakeWal();
     processor = new CommandProcessor(storageEngine, wal);
 
-    expect(processor.execute({ type: "CLEAR" })).toBe("OK");
+    await expect(processor.execute({ type: "CLEAR" })).resolves.toBe("OK");
     expect(wal.entries).toEqual([{ type: "CLEAR" }]);
   });
 
-  it("GET does not write to WAL", () => {
+  it("GET does not write to WAL", async () => {
     const wal = createFakeWal();
     processor = new CommandProcessor(storageEngine, wal);
 
-    processor.execute({ type: "GET", key: "missing" });
+    await processor.execute({ type: "GET", key: "missing" });
 
     expect(wal.entries).toEqual([]);
   });
 
-  it("EXISTS does not write to WAL", () => {
+  it("EXISTS does not write to WAL", async () => {
     const wal = createFakeWal();
     processor = new CommandProcessor(storageEngine, wal);
 
-    processor.execute({ type: "EXISTS", key: "missing" });
+    await processor.execute({ type: "EXISTS", key: "missing" });
 
     expect(wal.entries).toEqual([]);
   });
 
-  it("KEYS does not write to WAL", () => {
+  it("KEYS does not write to WAL", async () => {
     const wal = createFakeWal();
     processor = new CommandProcessor(storageEngine, wal);
 
-    processor.execute({ type: "KEYS" });
+    await processor.execute({ type: "KEYS" });
 
     expect(wal.entries).toEqual([]);
   });
 
-  it("SIZE does not write to WAL", () => {
+  it("SIZE does not write to WAL", async () => {
     const wal = createFakeWal();
     processor = new CommandProcessor(storageEngine, wal);
 
-    processor.execute({ type: "SIZE" });
+    await processor.execute({ type: "SIZE" });
 
     expect(wal.entries).toEqual([]);
+  });
+
+  it("multiple SET commands are applied in order", async () => {
+    const wal = createFakeWal();
+    processor = new CommandProcessor(storageEngine, wal);
+
+    await Promise.all([
+      processor.execute({ type: "SET", key: "name", value: "Siva" }),
+      processor.execute({ type: "SET", key: "name", value: "Ram" }),
+    ]);
+
+    expect(storageEngine.get("name")).toBe("Ram");
+    expect(wal.entries).toEqual([
+      { type: "SET", key: "name", value: "Siva" },
+      { type: "SET", key: "name", value: "Ram" },
+    ]);
+  });
+
+  it("WAL entries match final memory order", async () => {
+    const wal = createFakeWal();
+    processor = new CommandProcessor(storageEngine, wal);
+
+    await Promise.all([
+      processor.execute({ type: "SET", key: "name", value: "Siva" }),
+      processor.execute({ type: "SET", key: "name", value: "Ram" }),
+    ]);
+
+    const recoveredStorageEngine = new StorageEngine();
+    const recoveryManager = new RecoveryManager(wal, recoveredStorageEngine);
+    recoveryManager.recover();
+
+    expect(storageEngine.get("name")).toBe("Ram");
+    expect(recoveredStorageEngine.get("name")).toBe("Ram");
+  });
+
+  it("DELETE checks key existence inside queued task", async () => {
+    const wal = createFakeWal();
+    processor = new CommandProcessor(storageEngine, wal);
+
+    const setResult = processor.execute({
+      type: "SET",
+      key: "name",
+      value: "Siva",
+    });
+    const deleteResult = processor.execute({ type: "DELETE", key: "name" });
+
+    await expect(Promise.all([setResult, deleteResult])).resolves.toEqual([
+      "OK",
+      "DELETED",
+    ]);
+    expect(storageEngine.get("name")).toBeUndefined();
+    expect(wal.entries).toEqual([
+      { type: "SET", key: "name", value: "Siva" },
+      { type: "DELETE", key: "name" },
+    ]);
+  });
+
+  it("CLEAR is ordered with SET commands", async () => {
+    const wal = createFakeWal();
+    processor = new CommandProcessor(storageEngine, wal);
+
+    await Promise.all([
+      processor.execute({ type: "SET", key: "name", value: "Siva" }),
+      processor.execute({ type: "CLEAR" }),
+      processor.execute({ type: "SET", key: "city", value: "Hyderabad" }),
+    ]);
+
+    expect(storageEngine.get("name")).toBeUndefined();
+    expect(storageEngine.get("city")).toBe("Hyderabad");
+    expect(wal.entries).toEqual([
+      { type: "SET", key: "name", value: "Siva" },
+      { type: "CLEAR" },
+      { type: "SET", key: "city", value: "Hyderabad" },
+    ]);
+  });
+
+  it("failed write does not block future writes", async () => {
+    const wal = createFailingWalOnce();
+    processor = new CommandProcessor(storageEngine, wal);
+
+    await expect(
+      processor.execute({ type: "SET", key: "name", value: "Siva" })
+    ).rejects.toThrow("WAL append failed");
+
+    await expect(
+      processor.execute({ type: "SET", key: "name", value: "Ram" })
+    ).resolves.toBe("OK");
+
+    expect(storageEngine.get("name")).toBe("Ram");
+    expect(wal.entries).toEqual([{ type: "SET", key: "name", value: "Ram" }]);
   });
 });
 
 function createFakeWal(onAppend?: (entry: WalEntry) => void): {
   entries: WalEntry[];
   append(entry: WalEntry): void;
+  readAll(): WalEntry[];
 } {
   return {
     entries: [],
     append(entry: WalEntry): void {
       onAppend?.(entry);
       this.entries.push(entry);
+    },
+    readAll(): WalEntry[] {
+      return this.entries;
+    },
+  };
+}
+
+function createFailingWalOnce(): {
+  entries: WalEntry[];
+  append(entry: WalEntry): void;
+  readAll(): WalEntry[];
+} {
+  let shouldFail = true;
+
+  return {
+    entries: [],
+    append(entry: WalEntry): void {
+      if (shouldFail) {
+        shouldFail = false;
+        throw new Error("WAL append failed");
+      }
+
+      this.entries.push(entry);
+    },
+    readAll(): WalEntry[] {
+      return this.entries;
     },
   };
 }

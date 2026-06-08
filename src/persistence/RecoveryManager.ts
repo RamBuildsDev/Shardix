@@ -1,9 +1,13 @@
+import type { WalEntry } from "../core/commands";
 import { StorageEngine } from "../core/StorageEngine";
-import { WriteAheadLog } from "./WriteAheadLog";
+
+type WalReader = {
+  readAll(): WalEntry[];
+};
 
 export class RecoveryManager {
   constructor(
-    private writeAheadLog: WriteAheadLog,
+    private writeAheadLog: WalReader,
     private storageEngine: StorageEngine
   ) {}
 

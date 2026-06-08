@@ -69,6 +69,7 @@ export class TcpServer {
 
   private handleConnection(socket: Socket): void {
     let buffer = "";
+    let responseChain = Promise.resolve();
 
     this.sockets.add(socket);
     socket.setEncoding("utf8");
@@ -79,8 +80,10 @@ export class TcpServer {
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        const response = this.handleCommand(line.replace(/\r$/, ""));
-        socket.write(`${response}\n`);
+        responseChain = responseChain.then(async () => {
+          const response = await this.handleCommand(line.replace(/\r$/, ""));
+          socket.write(`${response}\n`);
+        });
       }
     });
 
@@ -89,10 +92,10 @@ export class TcpServer {
     });
   }
 
-  private handleCommand(commandLine: string): string {
+  private async handleCommand(commandLine: string): Promise<string> {
     try {
       const command = this.commandParser.parse(commandLine);
-      const response = this.commandProcessor.execute(command);
+      const response = await this.commandProcessor.execute(command);
       return this.formatResponse(response);
     } catch (error) {
       if (error instanceof ShardixError) {

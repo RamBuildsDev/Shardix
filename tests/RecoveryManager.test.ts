@@ -113,12 +113,12 @@ describe("RecoveryManager", () => {
     expect(storageEngine.size()).toBe(0);
   });
 
-  it("data survives simulated restart", () => {
+  it("data survives simulated restart", async () => {
     const wal = new WriteAheadLog(testLogPath);
     const firstStorageEngine = new StorageEngine();
     const firstProcessor = new CommandProcessor(firstStorageEngine, wal);
 
-    firstProcessor.execute({ type: "SET", key: "name", value: "Siva" });
+    await firstProcessor.execute({ type: "SET", key: "name", value: "Siva" });
 
     const recoveredStorageEngine = new StorageEngine();
     const recoveryManager = new RecoveryManager(wal, recoveredStorageEngine);
