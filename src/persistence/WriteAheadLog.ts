@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import type { WalEntry } from "../core/commands";
 
@@ -22,10 +28,19 @@ export class WriteAheadLog {
       return [];
     }
 
-    return contents
-      .split("\n")
-      .filter((line) => line.trim().length > 0)
-      .map((line) => JSON.parse(line) as WalEntry);
+    return contents.split("\n").reduce<WalEntry[]>((entries, line) => {
+      if (line.trim().length === 0) {
+        return entries;
+      }
+
+      try {
+        entries.push(JSON.parse(line) as WalEntry);
+      } catch {
+        // Corrupted WAL lines are skipped so recovery can continue.
+      }
+
+      return entries;
+    }, []);
   }
 
   clear(): void {
