@@ -16,13 +16,17 @@ export class ClusterState {
 
   constructor(peers: PeerConfig[] = []) {
     for (const peer of peers) {
-      this.nodes.set(peer.nodeId, {
-        nodeId: peer.nodeId,
-        host: peer.host,
-        port: peer.port,
-        status: "DOWN",
-      });
+      this.addNode(peer);
     }
+  }
+
+  addNode(peer: PeerConfig, status: NodeHealthStatus = "DOWN"): void {
+    this.nodes.set(peer.nodeId, {
+      nodeId: peer.nodeId,
+      host: peer.host,
+      port: peer.port,
+      status,
+    });
   }
 
   markUp(nodeId: string, seenAt = Date.now()): void {

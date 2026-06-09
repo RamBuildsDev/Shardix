@@ -33,6 +33,14 @@ export class CommandProcessor {
     this.replicationManager = options.replicationManager;
   }
 
+  setRole(role: NodeRole): void {
+    this.role = role;
+  }
+
+  setReplicationManager(replicationManager: ReplicationWriter | undefined): void {
+    this.replicationManager = replicationManager;
+  }
+
   execute(command: ParsedCommand): Promise<CommandResponse> {
     switch (command.type) {
       case "SET":

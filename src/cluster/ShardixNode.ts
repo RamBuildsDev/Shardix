@@ -5,8 +5,9 @@ import { RecoveryManager } from "../persistence/RecoveryManager";
 import { WriteAheadLog } from "../persistence/WriteAheadLog";
 import { TcpServer } from "../server/TcpServer";
 import { ClusterState } from "./ClusterState";
+import { ElectionManager } from "./ElectionManager";
 import { HeartbeatManager } from "./HeartbeatManager";
-import type { NodeConfig } from "./NodeConfig";
+import type { NodeConfig, NodeRole } from "./NodeConfig";
 import { ReplicationManager } from "./ReplicationManager";
 
 export class ShardixNode {
@@ -15,10 +16,19 @@ export class ShardixNode {
   private server: TcpServer;
   private clusterState: ClusterState;
   private heartbeatManager?: HeartbeatManager;
+  private commandProcessor: CommandProcessor;
 
   constructor(private config: NodeConfig) {
     this.writeAheadLog = new WriteAheadLog(config.walPath);
     this.clusterState = new ClusterState(config.peers);
+    this.clusterState.addNode(
+      {
+        nodeId: config.nodeId,
+        host: config.host,
+        port: config.port,
+      },
+      "UP"
+    );
 
     const replicationManager =
       config.role === "leader"
@@ -29,7 +39,7 @@ export class ShardixNode {
         ? new HeartbeatManager(config.peers, this.clusterState)
         : undefined;
     const commandParser = new CommandParser();
-    const commandProcessor = new CommandProcessor(
+    this.commandProcessor = new CommandProcessor(
       this.storageEngine,
       this.writeAheadLog,
       undefined,
@@ -41,7 +51,7 @@ export class ShardixNode {
 
     this.server = new TcpServer(
       commandParser,
-      commandProcessor,
+      this.commandProcessor,
       config.host,
       config.port
     );
@@ -73,5 +83,39 @@ export class ShardixNode {
 
   getClusterState(): ClusterState {
     return this.clusterState;
+  }
+
+  getNodeId(): string {
+    return this.config.nodeId;
+  }
+
+  getRole(): NodeRole {
+    return this.config.role;
+  }
+
+  promoteToLeader(): void {
+    this.config.role = "leader";
+    this.commandProcessor.setRole("leader");
+    this.commandProcessor.setReplicationManager(
+      new ReplicationManager(this.config.peers)
+    );
+  }
+
+  runElection(currentLeaderId: string): string | undefined {
+    const electionManager = new ElectionManager(this.clusterState, [
+      {
+        nodeId: this.config.nodeId,
+        host: this.config.host,
+        port: this.getPort(),
+      },
+      ...this.config.peers,
+    ]);
+    const result = electionManager.electLeader(currentLeaderId);
+
+    if (result.leaderId === this.config.nodeId && this.config.role !== "leader") {
+      this.promoteToLeader();
+    }
+
+    return result.leaderId;
   }
 }
