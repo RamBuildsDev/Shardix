@@ -8,6 +8,8 @@
   "server": "tsx src/index.ts",
   "router": "tsx src/router.ts",
   "cli": "tsx src/client/CliClient.ts",
+  "benchmark": "tsx benchmarks/run-benchmarks.ts",
+  "failure:demo": "tsx scripts/failure-demo.ts",
   "build": "tsc",
   "start": "node dist/src/index.js",
   "test": "vitest run tests",
