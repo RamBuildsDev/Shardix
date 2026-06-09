@@ -1,0 +1,54 @@
+services:
+  shardix-router:
+    build: .
+    command: ["node", "dist/src/router.js"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 7379
+      SHARDS: shard-1:shardix-node-1:7379
+    ports:
+      - "7379:7379"
+    depends_on:
+      - shardix-node-1
+
+  shardix-node-1:
+    build: .
+    environment:
+      NODE_ID: node-1
+      ROLE: leader
+      HOST: 0.0.0.0
+      PORT: 7379
+      WAL_PATH: data/node-1.log
+      PEERS: shardix-node-2:7380,shardix-node-3:7381
+    volumes:
+      - shardix-node-1-data:/app/data
+    depends_on:
+      - shardix-node-2
+      - shardix-node-3
+
+  shardix-node-2:
+    build: .
+    environment:
+      NODE_ID: node-2
+      ROLE: follower
+      HOST: 0.0.0.0
+      PORT: 7380
+      WAL_PATH: data/node-2.log
+    volumes:
+      - shardix-node-2-data:/app/data
+
+  shardix-node-3:
+    build: .
+    environment:
+      NODE_ID: node-3
+      ROLE: follower
+      HOST: 0.0.0.0
+      PORT: 7381
+      WAL_PATH: data/node-3.log
+    volumes:
+      - shardix-node-3-data:/app/data
+
+volumes:
+  shardix-node-1-data:
+  shardix-node-2-data:
+  shardix-node-3-data:
