@@ -87,6 +87,9 @@ export class CommandProcessor {
       case "SIZE":
         return Promise.resolve(this.storageEngine.size());
 
+      case "PING":
+        return Promise.resolve("PONG");
+
       case "REPL_SET":
         return this.writeQueue.enqueue(() => {
           const entry: WalEntry = {

@@ -92,6 +92,10 @@ describe("CommandProcessor", () => {
     await expect(processor.execute({ type: "SIZE" })).resolves.toBe(2);
   });
 
+  it("PING returns PONG", async () => {
+    await expect(processor.execute({ type: "PING" })).resolves.toBe("PONG");
+  });
+
   it("SET writes to WAL before storing value", async () => {
     const wal = createFakeWal((entry) => {
       expect(entry).toEqual({ type: "SET", key: "name", value: "Siva" });

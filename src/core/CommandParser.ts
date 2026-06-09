@@ -14,7 +14,7 @@ import {
 } from "./errors";
 
 const KEY_COMMANDS = new Set(["GET", "DELETE", "EXISTS"]);
-const NO_ARGUMENT_COMMANDS = new Set(["KEYS", "CLEAR", "SIZE"]);
+const NO_ARGUMENT_COMMANDS = new Set(["KEYS", "CLEAR", "SIZE", "PING"]);
 
 export class CommandParser {
   parse(input: string): ParsedCommand {
@@ -42,7 +42,9 @@ export class CommandParser {
 
     if (NO_ARGUMENT_COMMANDS.has(command)) {
       this.ensureNoArguments(rest);
-      return { type: command as Extract<CommandType, "KEYS" | "CLEAR" | "SIZE"> };
+      return {
+        type: command as Extract<CommandType, "KEYS" | "CLEAR" | "SIZE" | "PING">,
+      };
     }
 
     throw new ShardixError(INVALID_COMMAND, `Unsupported command: ${rawCommand}`);

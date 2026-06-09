@@ -8,6 +8,7 @@ export type CommandType =
   | "KEYS"
   | "CLEAR"
   | "SIZE"
+  | "PING"
   | "REPL_SET"
   | "REPL_DELETE"
   | "REPL_CLEAR";
@@ -45,6 +46,10 @@ export type SizeCommand = {
   type: "SIZE";
 };
 
+export type PingCommand = {
+  type: "PING";
+};
+
 export type ReplSetCommand = {
   type: "REPL_SET";
   key: Key;
@@ -68,6 +73,7 @@ export type ParsedCommand =
   | KeysCommand
   | ClearCommand
   | SizeCommand
+  | PingCommand
   | ReplSetCommand
   | ReplDeleteCommand
   | ReplClearCommand;

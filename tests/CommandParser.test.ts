@@ -56,6 +56,10 @@ describe("CommandParser", () => {
     expect(parser.parse("SIZE")).toEqual({ type: "SIZE" });
   });
 
+  it("parses PING command", () => {
+    expect(parser.parse("PING")).toEqual({ type: "PING" });
+  });
+
   it("parses REPL SET", () => {
     expect(parser.parse("REPL SET name Siva")).toEqual({
       type: "REPL_SET",
